@@ -34,11 +34,6 @@ mm_link_regex: re.Pattern = re.compile(
 overlay_url_regex: re.Pattern = re.compile(
     r'(https://account\.towercoverage\.com/[0-9a-z]+/multicovs/[0-9a-z]+/[0-9_]+\.png)')
 
-bounding_box_regex: re.Pattern = re.compile(
-    r'\s*var imageBounds = new google\.maps\.LatLngBounds\(new google\.maps\.LatLng\( '
-    + r'(-?[0-9]{1,3}\.[0-9]+),(-?[0-9]{1,3}\.[0-9]+)\), new google\.maps\.LatLng\( '
-    + r'(-?[0-9]{1,3}\.[0-9]+),(-?[0-9]{1,3}\.[0-9]+)\)\);\s*')
-
 headers: dict = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
                   + 'Chrome/121.0.0.0 Safari/537.36',
@@ -119,14 +114,22 @@ mm_url: str = f'https://www.towercoverage.com/En-Us/Dashboard/MultiCoverageViewO
 page_content: str = requests.get(mm_url, cookies=cookies).text
 
 overlay_match = overlay_url_regex.search(page_content, re.MULTILINE)
-bounding_box_match = bounding_box_regex.search(page_content, re.MULTILINE)
 
 if not overlay_match:
     print('Failed to find the overlay image URL!')
     exit(1)
 
-if not bounding_box_match:
-    print('Failed to find the bounding box information!')
+# locate left and right LatLong to build bounding box
+pattern = r"leftLatLong:\s*['\"]\s*([+-]?\d+\.\d+),\s*([+-]?\d+\.\d+)"
+
+leftmatch = re.search(pattern, page_content)
+
+pattern = r"rightLatLong:\s*['\"]\s*([+-]?\d+\.\d+),\s*([+-]?\d+\.\d+)"
+
+rightmatch = re.search(pattern, page_content)
+
+if not leftmatch or not rightmatch:
+    print("Failed to find the bounding box information!")
     exit(1)
 
 overlay_url: str = overlay_match.group(1)
@@ -143,10 +146,10 @@ if image_req.status_code != 200:
 with open(raster_path, 'wb') as raster_file:
     raster_file.write(image_req.content)
 
-bound_south: float = float(bounding_box_match.group(1))
-bound_west: float = float(bounding_box_match.group(2))
-bound_north: float = float(bounding_box_match.group(3))
-bound_east: float = float(bounding_box_match.group(4))
+bound_south: float = float(leftmatch.group(1))
+bound_west: float = float(leftmatch.group(2))
+bound_north: float = float(rightmatch.group(1))
+bound_east: float = float(rightmatch.group(2))
 
 print('Loading overlay image meta...\n')
 
